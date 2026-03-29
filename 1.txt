@@ -1,3 +1,2 @@
 This is a first file of the development branch.
-Written the signup button code.
-Stay tuned for the Login button, it will be added soon ASAP.
+Written the Login button code.
