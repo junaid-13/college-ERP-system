@@ -1,2 +1,0 @@
-This is a first file of the development branch.
-Written the Login button code.
