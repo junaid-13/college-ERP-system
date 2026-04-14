@@ -1,4 +1,4 @@
-def buil_prompt(config: dict, user_prompt: str):
+def build_prompt(config: dict, user_prompt: str):
     return f"""
 You are a senior full-stack developer.
 
