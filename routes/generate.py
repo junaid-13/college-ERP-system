@@ -1,3 +1,5 @@
+from logging import config
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 import os
@@ -26,11 +28,11 @@ def generate(project_name: str, body: GenerateRequest):
     config = read_json(os.path.join(project_path, "config.json"))
     memory = load_memory(project_name)
     
-    final_prompt = build_prompt(config, body.prompt)
-    
+    final_prompt = build_prompt(config, memory, body.prompt)
     result = generate_from_ollama(final_prompt)
+
     
-    update_memory = update_memory(
+    update_memory(
         project_name,
         memory,
         body.prompt,
