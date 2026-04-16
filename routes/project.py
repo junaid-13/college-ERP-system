@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 import os
 from utils.file_handler import create_directory, write_json
+from services.feature_manager import set_current_feature
+from utils.file_handler import read_json, write_json
 
 router = APIRouter()
 PROJECTS_DIR = "projects"
@@ -47,3 +49,26 @@ def create_project(data: CreateProjectRequest):
     write_json(os.path.join(project_path, "features.json"), features)
     
     return {"message": f"Project '{data.project_name}' created successfully."}
+
+@router.post("/project/{project_name}/feature")
+def update_feature(project_name: str, feature_name: str):
+    project_path = os.path.join(PROJECTS_DIR, project_name)
+    
+    if not os.path.exists(project_path):
+        return {"error": "Project not found"}
+    
+    # update features.json
+    features = set_current_feature(project_path, feature_name)
+    
+    # Update memory.json
+    memory_path = os.path.join(project_path, "memory.json")
+    memory = read_json(memory_path)
+    
+    memory["current_feature"] = feature_name
+    memory["last_task"] = f"Started {feature_name}"
+    
+    write_json(memory_path, memory)
+    return {
+        "message": f"Switched to feature '{feature_name}'",
+        "features": features
+    }
