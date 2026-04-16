@@ -30,13 +30,19 @@ def generate(project_name: str, body: GenerateRequest):
     config = read_json(os.path.join(project_path, "config.json"))
     memory = load_memory(project_name)
     
-    # get code context
+    # get relevant files
     files = get_relevant_files(project_name, body.files)
     
+    print("got relevant files")
+    # build context
+    code_context = format_code_context(files)
+    
+    print("got the code context.")
     # build prompt
-    final_prompt = build_prompt(config, memory, body.prompt)
+    final_prompt = build_prompt(config, memory, code_context, body.prompt)
+    print("Got the final prompt.")
     result = generate_from_ollama(final_prompt)
-
+    print("Got the result from ollama.")
     
     update_memory(
         project_name,
