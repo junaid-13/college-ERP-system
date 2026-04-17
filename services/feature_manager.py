@@ -5,7 +5,13 @@ PROJECT_DIR = "projects"
 
 def load_features(project_name):
     path = os.path.join(PROJECT_DIR, project_name, "features.json")
-    return read_json(path)
+    data = read_json(path)
+
+    if not data:
+        data = {"features": []}
+        write_json(path, data)
+
+    return data
 
 def save_features(project_name: str, data: dict):
     path = os.path.join(PROJECT_DIR, project_name, "features.json")

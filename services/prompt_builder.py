@@ -1,12 +1,13 @@
-def build_prompt(config: dict, memory: dict, features: dict, code_context: str,user_prompt: str):
+def build_prompt(config, memory, features, code_context, user_prompt):
     completed = [
         f["name"] for f in features["features"]
         if f["status"] == "completed"
     ]
+
     return f"""
 You are a senior full-stack developer.
 
-project: {config['project_name']}
+Project: {config['project_name']}
 Stack: {config['stack']}
 
 System Instructions:
@@ -26,13 +27,34 @@ Completed Features:
 
 {code_context}
 
-user Request:
+User Request:
 {user_prompt}
 
-Continue the current feature intelligently.
-If needed, ask for missing files.
+IMPORTANT OUTPUT FORMAT:
 
-Provide clean, production-ready code.
+1. Always structure your response like this:
+
+### Code
+<ONLY code inside proper code block with language>
+
+### Explanation
+<clear explanation>
+
+### Next Steps
+<what to do next>
+
+2. Code MUST:
+- be inside triple backticks
+- include language (e.g. ```js, ```python)
+- be clean and properly formatted
+
+3. DO NOT mix explanation inside code
+
+4. DO NOT return JSON
+
+5. DO NOT skip sections
+
+Follow this strictly.
 """
 # Continue the project intelligently based on current progress.
 # The above line has been removed. If want to reuse then you can add it above the provide clean, production-ready code.
