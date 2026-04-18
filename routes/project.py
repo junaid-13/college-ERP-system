@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query
-from pydantic import BaseModel, StringConstraints
-from typing import Annotated
+from pydantic import BaseModel
 import os
 import re
 from utils.file_handler import create_directory, write_json, read_json
@@ -11,10 +10,7 @@ router = APIRouter()
 PROJECTS_DIR = "projects"
 
 class CreateProjectRequest(BaseModel):
-    project_name: Annotated[
-        str,
-        StringConstraints(pattern=r'^[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*$')
-    ]
+    project_name: str
     system_prompt: str
     stack: str
     
@@ -36,7 +32,7 @@ def validate_project_name(name: str) -> str:
 def create_project(data: CreateProjectRequest):
     
     project_name = validate_project_name(data.project_name)
-    project_path = os.path.join(PROJECTS_DIR, data.project_name)
+    project_path = os.path.join(PROJECTS_DIR, project_name)
     
     if os.path.isdir(project_path):
         raise HTTPException(
@@ -52,7 +48,7 @@ def create_project(data: CreateProjectRequest):
 
         # config.json
         config = {
-            "project_name": data.project_name,
+            "project_name": project_name,
             "system_prompt": data.system_prompt,
             "stack": data.stack
         }
@@ -79,7 +75,7 @@ def create_project(data: CreateProjectRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create project: {str(e)}"
         ) 
-    return {"message": f"Project '{data.project_name}' created successfully."}
+    return {"message": f"Project '{project_name}' created successfully."}
 
 
 @router.post("/project/{project_name}/feature", status_code=status.HTTP_200_OK)
@@ -93,6 +89,7 @@ def update_feature(project_name: str, feature_name: str):
             detail="Project not found"
         )
     
+    feature_name = feature_name.strip()
     if not feature_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
