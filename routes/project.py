@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
+from typing import Annotated
 import os
 from utils.file_handler import create_directory, write_json, read_json
 from services.feature_manager import set_current_feature
@@ -9,7 +10,10 @@ router = APIRouter()
 PROJECTS_DIR = "projects"
 
 class CreateProjectRequest(BaseModel):
-    project_name: str
+    project_name: Annotated[
+        str,
+        StringConstraints(pattern=r'^[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*$')
+    ]
     system_prompt: str
     stack: str
     
