@@ -1,8 +1,4 @@
-
-from fastapi import APIRouter
-
 from fastapi import APIRouter, HTTPException, status, Query
-
 from pydantic import BaseModel, StringConstraints
 from typing import Annotated
 import os
