@@ -84,6 +84,7 @@ def create_project(data: CreateProjectRequest):
 
 @router.post("/project/{project_name}/feature", status_code=status.HTTP_200_OK)
 def update_feature(project_name: str, feature_name: str):
+    project_name = validate_project_name(project_name)
     project_path = os.path.join(PROJECTS_DIR, project_name)
     
     if not os.path.isdir(project_path):
