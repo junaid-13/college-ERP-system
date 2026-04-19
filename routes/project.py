@@ -41,19 +41,16 @@ def create_project(data: CreateProjectRequest):
         )
     
     try:
-        # Create project directory
         create_directory(project_path)
         create_directory(os.path.join(project_path, "features"))
  
 
-        # config.json
         config = {
             "project_name": project_name,
             "system_prompt": data.system_prompt,
             "stack": data.stack
         }
     
-        # memory.json
         memory = {
             "current_feature": None,
             "last_task": None,
@@ -61,7 +58,6 @@ def create_project(data: CreateProjectRequest):
             "last_updated": None
         }
     
-        # features.json
         features = {
             "features": []
         }
@@ -97,11 +93,9 @@ def update_feature(project_name: str, feature_name: str):
         )
 
     try:
-        # update features.json
         features = set_current_feature(project_name, feature_name)    
     
     
-        # Update memory.json
         memory_path = os.path.join(project_path, "memory.json")
         memory = read_json(memory_path)
         if not memory:
