@@ -69,6 +69,7 @@ async def generate(
     pretty: bool = Query(True)
 ):
     project_name = validate_project_name(project_name)
+
     project_path = os.path.join(PROJECTS_DIR, project_name)
 
     if not os.path.isdir(project_path):
@@ -88,9 +89,26 @@ async def generate(
 
         features = get_cached_features(project_name)
 
-        safe_files = validate_files(body.files)
-        files = get_relevant_files(project_name, safe_files)
-        code_context = format_code_context(files)
+        files = []
+
+        if body.files:
+            safe_files = validate_files(body.files)
+            files = get_relevant_files(project_name, safe_files)
+
+        else:
+            logger.info(f"[project={project_name}] No files provided, scanning project files")
+
+            try:
+                files = get_relevant_files(project_name, None)
+            except Exception as e:
+                logger.warning(f"[project={project_name}] Failed to load project files: {repr(e)}")
+                files = []
+
+        if files:
+            code_context = format_code_context(files)
+        else:
+            logger.info(f"[project={project_name}] No files available for context")
+            code_context = ""
 
         final_prompt = build_prompt(
             config,
@@ -105,7 +123,7 @@ async def generate(
 
         raw_result = await asyncio.wait_for(
             asyncio.to_thread(generate_from_ollama, final_prompt),
-            timeout=3600  
+            timeout=900
         )
 
         end = time.time()
@@ -113,9 +131,6 @@ async def generate(
 
         if not raw_result:
             raise HTTPException(500, "Empty response from generation service")
-
-        logger.info(f"[project={project_name}] Raw LLM output received")
-
         cleaned = clean_response(raw_result)
         formatted = format_llm_output(cleaned)
 
@@ -164,5 +179,5 @@ async def generate(
         "used_files": [
             f[0] for f in files
             if isinstance(f, (list, tuple)) and len(f) > 0
-        ]
+        ] if files else []
     }
