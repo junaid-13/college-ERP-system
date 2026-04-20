@@ -22,16 +22,28 @@ def clean_response(text: str) -> str:
 
 
 def format_llm_output(text: str):
-    code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", text, re.DOTALL)
+    code_blocks = re.findall(r"```(?:\w+)?\s*([\s\S]*?)```", text)
 
     explanation = re.sub(
-        r"```(?:\w+)?\n.*?```",
+        r"```(?:\w+)?\s*.*?```",
         "",
         text,
         flags=re.DOTALL
     )
 
-    explanation = re.sub(r"^#+.*", "", explanation, flags=re.MULTILINE)
+    explanation = re.sub(
+        r"^#{1,3}\s*(Code|Explanation).*",
+        "",
+        explanation,
+        flags=re.IGNORECASE | re.MULTILINE
+    )
+
+    # Fallback if no code found
+    if not code_blocks:
+        return {
+            "code": [],
+            "explanation": text.strip()
+        }
 
     return {
         "code": [c.strip() for c in code_blocks],
@@ -39,19 +51,19 @@ def format_llm_output(text: str):
     }
 
 
-
 def build_claude_style_output(formatted):
-    output = ""
+    lines = []
 
-    for idx, code in enumerate(formatted["code"], start=1):
-        output += f"\n📦 Code Block {idx}\n"
-        output += "─" * 60 + "\n"
-        output += code.strip() + "\n"
-        output += "─" * 60 + "\n"
+    for idx, code in enumerate(formatted.get("code", []), start=1):
+        lines.append(f"📦 Code Block {idx}")
+        lines.append("─" * 60)
+        lines.append(code.strip())
+        lines.append("─" * 60)
+        lines.append("")
 
-    if formatted["explanation"]:
-        output += "\n🧠 Explanation\n"
-        output += "─" * 60 + "\n"
-        output += formatted["explanation"].strip() + "\n"
+    if formatted.get("explanation"):
+        lines.append("🧠 Explanation")
+        lines.append("─" * 60)
+        lines.append(formatted["explanation"].strip())
 
-    return output.strip()
+    return "\n".join(lines).strip()

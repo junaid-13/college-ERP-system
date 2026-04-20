@@ -1,26 +1,26 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 import os
 import re
 from functools import lru_cache
+import asyncio
+import logging
+import time
 
-from utils.file_handler import read_json
 from services.ollama_client import generate_from_ollama
 from services.prompt_builder import build_prompt
 from services.memory_manager import load_memory, update_memory
 from services.context_builder import get_relevant_files, format_code_context
 from services.feature_manager import load_features
+from utils.file_handler import read_json
+from utils.response_cleaner import clean_response, format_llm_output, build_claude_style_output
 
-from utils.response_cleaner import (
-    clean_response,
-    format_llm_output,
-    build_claude_style_output
-)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-PROJECTS_DIR = "projects"
+PROJECTS_DIR = os.path.abspath("projects")
 
 
 def validate_project_name(name: str) -> str:
@@ -35,12 +35,15 @@ def validate_project_name(name: str) -> str:
 def validate_files(files: list[str]) -> list[str]:
     safe_files = []
     for f in files:
-        if ".." in f or "/" in f or "\\" in f:
+        clean_path = os.path.normpath(f)
+
+        if clean_path.startswith("..") or os.path.isabs(clean_path):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid file path: {f}"
             )
         safe_files.append(f)
+
     return safe_files
 
 
@@ -60,12 +63,15 @@ def get_cached_features(project_name: str):
 
 
 @router.post("/generate/{project_name}")
-async def generate(project_name: str, body: GenerateRequest):
-
+async def generate(
+    project_name: str,
+    body: GenerateRequest,
+    pretty: bool = Query(True)
+):
     project_name = validate_project_name(project_name)
     project_path = os.path.join(PROJECTS_DIR, project_name)
 
-    if not os.path.exists(project_path):
+    if not os.path.isdir(project_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found."
@@ -74,11 +80,11 @@ async def generate(project_name: str, body: GenerateRequest):
     try:
         config = get_cached_config(project_path)
         if not config:
-            raise ValueError("Missing or invalid config.json")
+            raise HTTPException(500, "Invalid or missing config.json")
 
         memory = load_memory(project_name)
         if not memory:
-            raise ValueError("Missing or invalid memory.json")
+            raise HTTPException(500, "Invalid or missing memory.json")
 
         features = get_cached_features(project_name)
 
@@ -94,13 +100,31 @@ async def generate(project_name: str, body: GenerateRequest):
             body.prompt
         )
 
-        raw_result = generate_from_ollama(final_prompt)
+        start = time.time()
+        logger.info(f"[project={project_name}] LLM call started")
+
+        raw_result = await asyncio.wait_for(
+            asyncio.to_thread(generate_from_ollama, final_prompt),
+            timeout=3600  
+        )
+
+        end = time.time()
+        logger.info(f"[project={project_name}] LLM finished in {end - start:.2f}s")
 
         if not raw_result:
-            raise ValueError("Empty response from generation service")
+            raise HTTPException(500, "Empty response from generation service")
+
+        logger.info(f"[project={project_name}] Raw LLM output received")
 
         cleaned = clean_response(raw_result)
         formatted = format_llm_output(cleaned)
+
+        if not isinstance(formatted, dict):
+            raise HTTPException(500, "Invalid formatted output")
+
+        formatted.setdefault("code", [])
+        formatted.setdefault("explanation", "")
+
         pretty_output = build_claude_style_output(formatted)
 
         try:
@@ -110,49 +134,35 @@ async def generate(project_name: str, body: GenerateRequest):
                 body.prompt,
                 cleaned
             )
-        except Exception:
+        except Exception as e:
+            logger.error(f"[project={project_name}] Memory update failed: {repr(e)}")
             updated_memory = memory
+
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="LLM request timed out"
+        )
 
     except HTTPException:
         raise
+
     except Exception as e:
+        logger.exception(f"[project={project_name}] Unexpected generation failure: {repr(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Generation failed: {str(e)}"
+            detail=f"Generation failed: {repr(e)}"
         )
 
-    return PlainTextResponse(pretty_output)
-''''
-    config = read_json(os.path.join(project_path, "config.json"))
-    memory = load_memory(project_name)
-    features = load_features(project_name)
-
-    # get relevant files
-    files = get_relevant_files(project_name, body.files)
-
-    code_context = format_code_context(files)
-
-    final_prompt = build_prompt(
-        config,
-        memory,
-        features,
-        code_context,
-        body.prompt
-    )
-
-    raw_result = generate_from_ollama(final_prompt)
-    result = clean_response(raw_result)
-    result = result.replace("\\n", "\n")
-    
-    updated_memory = update_memory(
-        project_name,
-        memory,
-        body.prompt,
-        result
-    )
+    if pretty:
+        return PlainTextResponse(pretty_output)
 
     return {
-        "result": result,
+        "code": formatted["code"],
+        "explanation": formatted["explanation"],
         "memory": updated_memory,
-        "used_files": [f[0] for f in files]
-    }'''
+        "used_files": [
+            f[0] for f in files
+            if isinstance(f, (list, tuple)) and len(f) > 0
+        ]
+    }
